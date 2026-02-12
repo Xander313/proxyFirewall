@@ -1,4 +1,4 @@
-#!/home/rimb/proxyFirewall/venv/bin/python3
+#!/home/anthony/Documentos/APLICACIONES_WEB/proxyFirewall/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

@@ -1,12 +1,12 @@
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 from Aplicaciones.control.models import (
     HttpMethod,
     NetProtocol,
     Rule,
-    RuleAction,
     Service,
     SoftDeleteModel,
     Url,
@@ -34,9 +34,12 @@ class LogLevel(models.TextChoices):
 
 class Request(SoftDeleteModel):
     request_id = models.BigAutoField(primary_key=True)
-    ts = models.DateTimeField()
+
+    ts = models.DateTimeField(default=timezone.now)
+
     client_ip = models.GenericIPAddressField(protocol="both", unpack_ipv4=True)
-    client_port = models.PositiveIntegerField()
+    client_port = models.PositiveIntegerField(default=0)  # squid access.log no suele traerlo
+
     user = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -61,27 +64,38 @@ class Request(SoftDeleteModel):
         db_column="url_id",
         related_name="requests",
     )
+
     dest_ip = models.GenericIPAddressField(
         protocol="both", unpack_ipv4=True, null=True, blank=True
     )
     dest_port = models.PositiveIntegerField(null=True, blank=True)
+
     protocol = models.CharField(
         max_length=3,
         choices=NetProtocol.choices,
         null=True,
         blank=True,
     )
+
     http_status = models.PositiveIntegerField(null=True, blank=True)
+
     bytes_in = models.BigIntegerField(default=0)
     bytes_out = models.BigIntegerField(default=0)
+
     elapsed_ms = models.PositiveIntegerField(null=True, blank=True)
+
     cache_status = models.CharField(
         max_length=11,
         choices=CacheStatus.choices,
         null=True,
         blank=True,
     )
-    verdict = models.CharField(max_length=5, choices=Verdict.choices, default=Verdict.ALLOW)
+
+    verdict = models.CharField(
+        max_length=5,
+        choices=Verdict.choices,
+        default=Verdict.ALLOW,
+    )
     block_reason = models.TextField(blank=True, default="")
 
     class Meta:
@@ -93,6 +107,7 @@ class Request(SoftDeleteModel):
 
 class RuleMatch(SoftDeleteModel):
     match_id = models.BigAutoField(primary_key=True)
+
     request = models.ForeignKey(
         Request,
         on_delete=models.CASCADE,
@@ -105,7 +120,10 @@ class RuleMatch(SoftDeleteModel):
         db_column="rule_id",
         related_name="matches",
     )
-    action = models.CharField(max_length=10, choices=RuleAction.choices)
+
+    # En el DDL: action es verdict_enum (ALLOW/DENY)
+    action = models.CharField(max_length=5, choices=Verdict.choices)
+
     matched_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -117,17 +135,19 @@ class RuleMatch(SoftDeleteModel):
 
 class SecurityAlert(SoftDeleteModel):
     alert_id = models.BigAutoField(primary_key=True)
+
     request = models.ForeignKey(
         Request,
         on_delete=models.CASCADE,
         db_column="request_id",
         related_name="security_alerts",
     )
+
     engine = models.CharField(max_length=100)
     severity = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(0), MaxValueValidator(10)]
     )
-    signature = models.CharField(max_length=255)
+    signature = models.CharField(max_length=255, blank=True, default="")
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -140,13 +160,16 @@ class SecurityAlert(SoftDeleteModel):
 
 class FirewallEvent(SoftDeleteModel):
     fw_id = models.BigAutoField(primary_key=True)
+
     request = models.ForeignKey(
         Request,
         on_delete=models.CASCADE,
         db_column="request_id",
         related_name="firewall_events",
     )
-    ts = models.DateTimeField()
+
+    ts = models.DateTimeField(default=timezone.now)
+
     src_zone = models.ForeignKey(
         Zone,
         on_delete=models.SET_NULL,
@@ -171,7 +194,10 @@ class FirewallEvent(SoftDeleteModel):
         db_column="service_id",
         related_name="firewall_events",
     )
-    action = models.CharField(max_length=10, choices=RuleAction.choices)
+
+    # En el DDL: action es verdict_enum (ALLOW/DENY)
+    action = models.CharField(max_length=5, choices=Verdict.choices)
+
     nat_info = models.JSONField(null=True, blank=True)
 
     class Meta:
@@ -183,15 +209,17 @@ class FirewallEvent(SoftDeleteModel):
 
 class CacheEntry(SoftDeleteModel):
     cache_id = models.BigAutoField(primary_key=True)
+
     url = models.ForeignKey(
         Url,
         on_delete=models.CASCADE,
         db_column="url_id",
         related_name="cache_entries",
     )
+
     size = models.BigIntegerField()
-    last_accessed = models.DateTimeField()
-    expiration_time = models.DateTimeField()
+    last_accessed = models.DateTimeField(null=True, blank=True)
+    expiration_time = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "cache_entry"
@@ -209,6 +237,7 @@ class CacheEntry(SoftDeleteModel):
 
 class ErrorLog(SoftDeleteModel):
     error_id = models.BigAutoField(primary_key=True)
+
     request = models.ForeignKey(
         Request,
         on_delete=models.SET_NULL,
@@ -217,7 +246,8 @@ class ErrorLog(SoftDeleteModel):
         db_column="request_id",
         related_name="error_logs",
     )
-    ts = models.DateTimeField()
+
+    ts = models.DateTimeField(default=timezone.now)
     level = models.CharField(max_length=8, choices=LogLevel.choices, default=LogLevel.ERROR)
     message = models.TextField()
     component = models.CharField(max_length=100)
