@@ -6,8 +6,12 @@ from datetime import timedelta
 
 from .models import Request, CacheEntry
 from .squid_utils import squid_status, db_status
+from django.contrib.auth.decorators import login_required
 
 
+
+
+@login_required
 def dashboard(request):
     total_requests = Request.objects.count()
     total_blocked = Request.objects.filter(verdict="DENY").count()

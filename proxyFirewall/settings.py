@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "Aplicaciones.control.apps.ControlConfig",
     "Aplicaciones.events.apps.EventsConfig",
+    "Aplicaciones.accounts.apps.AccountsConfig",
 ]
 
 MIDDLEWARE = [
@@ -100,6 +101,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Note: login redirects removed — dashboard is intentionally public for Alex's demo
+
+# Authentication URLs for the new accounts app
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/events/dashboard/"
+
 
 # Squid integration (paths outside the project). Set these via environment variables if needed.
 # WARNING: reading /etc/squid/* may require elevated permissions on the host.
