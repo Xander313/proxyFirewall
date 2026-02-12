@@ -6,6 +6,9 @@ from django.core.exceptions import ValidationError
 import re
 
 
+# -------------------------
+# Soft Delete Base
+# -------------------------
 class SoftDeleteQuerySet(models.QuerySet):
     def delete(self):
         deleted_at = timezone.now()
@@ -51,6 +54,9 @@ class SoftDeleteModel(models.Model):
         self.save(update_fields=["is_delete", "deleted_at"])
 
 
+# -------------------------
+# Enums
+# -------------------------
 class AuthType(models.TextChoices):
     LOCAL = "LOCAL", "LOCAL"
     LDAP = "LDAP", "LDAP"
@@ -76,6 +82,9 @@ class RuleAction(models.TextChoices):
     LOG_ONLY = "LOG_ONLY", "LOG_ONLY"
 
 
+# -------------------------
+# Models
+# -------------------------
 class User(SoftDeleteModel):
     user_id = models.BigAutoField(primary_key=True)
     username = models.CharField(max_length=150)
@@ -188,6 +197,95 @@ class Policy(SoftDeleteModel):
         return self.name
 
 
+# -------------------------
+# Rule.condition Standard + Validation (JSONB)
+# -------------------------
+DAYS = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
+
+
+def _is_time_hhmm(value: str) -> bool:
+    return bool(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(value)))
+
+
+def validate_rule_condition(condition: dict):
+    if not isinstance(condition, dict):
+        raise ValidationError("condition debe ser un objeto JSON (dict).")
+
+    # version
+    if condition.get("version") != 1:
+        raise ValidationError("condition.version debe ser 1.")
+
+    # note (justificación)
+    note = condition.get("note")
+    if not isinstance(note, str) or not note.strip():
+        raise ValidationError("condition.note es obligatorio y debe ser texto.")
+
+    # match
+    match = condition.get("match")
+    if not isinstance(match, dict):
+        raise ValidationError("condition.match es obligatorio y debe ser un objeto JSON.")
+
+    allowed_match_keys = {"zones", "url_categories", "urls", "http_methods", "services"}
+    unknown = set(match.keys()) - allowed_match_keys
+    if unknown:
+        raise ValidationError(
+            f"condition.match contiene claves no permitidas: {sorted(unknown)}"
+        )
+
+    # al menos 1 criterio
+    has_any = any(match.get(k) for k in allowed_match_keys)
+    if not has_any:
+        raise ValidationError(
+            "condition.match debe tener al menos un criterio (zones/url_categories/urls/http_methods/services)."
+        )
+
+    # tipos
+    if "zones" in match and not isinstance(match["zones"], list):
+        raise ValidationError("condition.match.zones debe ser lista de zone_id.")
+    if "url_categories" in match and not isinstance(match["url_categories"], list):
+        raise ValidationError("condition.match.url_categories debe ser lista de category_id.")
+    if "urls" in match and not isinstance(match["urls"], list):
+        raise ValidationError("condition.match.urls debe ser lista de strings (dominios/urls).")
+    if "http_methods" in match:
+        if not isinstance(match["http_methods"], list) or not all(
+            isinstance(x, str) for x in match["http_methods"]
+        ):
+            raise ValidationError("condition.match.http_methods debe ser lista de strings (GET/POST...).")
+    if "services" in match:
+        if not isinstance(match["services"], list):
+            raise ValidationError("condition.match.services debe ser lista.")
+        for s in match["services"]:
+            if not isinstance(s, dict):
+                raise ValidationError("Cada item de services debe ser objeto {protocol, port}.")
+            if s.get("protocol") not in {"TCP", "UDP"}:
+                raise ValidationError("services.protocol debe ser TCP o UDP.")
+            port = s.get("port")
+            if not isinstance(port, int) or port < 1 or port > 65535:
+                raise ValidationError("services.port debe ser entero 1..65535.")
+
+    # time (opcional)
+    if "time" in condition and condition["time"] is not None:
+        t = condition["time"]
+        if not isinstance(t, dict):
+            raise ValidationError("condition.time debe ser un objeto JSON.")
+
+        days = t.get("days")
+        start = t.get("start")
+        end = t.get("end")
+        tz = t.get("tz")
+
+        if not isinstance(days, list) or not days:
+            raise ValidationError("condition.time.days debe ser lista no vacía.")
+        if any(d not in DAYS for d in days):
+            raise ValidationError("condition.time.days inválido (use MON..SUN).")
+
+        if not _is_time_hhmm(start) or not _is_time_hhmm(end):
+            raise ValidationError("condition.time.start y end deben tener formato HH:MM.")
+
+        if tz is None or not isinstance(tz, str) or not tz.strip():
+            raise ValidationError("condition.time.tz es obligatorio (ej: America/Guayaquil).")
+
+
 class Rule(SoftDeleteModel):
     rule_id = models.BigAutoField(primary_key=True)
     policy = models.ForeignKey(
@@ -214,6 +312,14 @@ class Rule(SoftDeleteModel):
 
     def __str__(self):
         return f"{self.policy.name}#{self.priority}:{self.action}"
+
+    def clean(self):
+        super().clean()
+        validate_rule_condition(self.condition)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class Zone(SoftDeleteModel):
@@ -253,143 +359,3 @@ class Service(SoftDeleteModel):
 
     def __str__(self):
         return f"{self.name} ({self.protocol}/{self.port})"
-
-
-DAYS = {"MON","TUE","WED","THU","FRI","SAT","SUN"}
-
-def _is_time_hhmm(value: str) -> bool:
-    return bool(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(value)))
-
-def validate_rule_condition(condition: dict):
-    if not isinstance(condition, dict):
-        raise ValidationError("condition debe ser un objeto JSON (dict).")
-
-    if condition.get("version") != 1:
-        raise ValidationError("condition.version debe ser 1.")
-
-    note = condition.get("note")
-    if not isinstance(note, str) or not note.strip():
-        raise ValidationError("condition.note es obligatorio y debe ser texto.")
-
-    match = condition.get("match")
-    if not isinstance(match, dict):
-        raise ValidationError("condition.match es obligatorio y debe ser un objeto JSON.")
-
-    allowed_match_keys = {"zones", "url_categories", "urls", "http_methods", "services"}
-    unknown = set(match.keys()) - allowed_match_keys
-    if unknown:
-        raise ValidationError(f"condition.match contiene claves no permitidas: {sorted(unknown)}")
-
-    has_any = any(match.get(k) for k in allowed_match_keys)
-    if not has_any:
-        raise ValidationError("condition.match debe tener al menos un criterio (zones/url_categories/urls/http_methods/services).")
-
-    if "zones" in match and not isinstance(match["zones"], list):
-        raise ValidationError("condition.match.zones debe ser lista de zone_id.")
-    if "url_categories" in match and not isinstance(match["url_categories"], list):
-        raise ValidationError("condition.match.url_categories debe ser lista de category_id.")
-    if "urls" in match and not isinstance(match["urls"], list):
-        raise ValidationError("condition.match.urls debe ser lista de strings (dominios/urls).")
-    if "http_methods" in match:
-        if not isinstance(match["http_methods"], list) or not all(isinstance(x, str) for x in match["http_methods"]):
-            raise ValidationError("condition.match.http_methods debe ser lista de strings (GET/POST...).")
-    if "services" in match:
-        if not isinstance(match["services"], list):
-            raise ValidationError("condition.match.services debe ser lista.")
-        for s in match["services"]:
-            if not isinstance(s, dict):
-                raise ValidationError("Cada item de services debe ser objeto {protocol, port}.")
-            if s.get("protocol") not in {"TCP","UDP"}:
-                raise ValidationError("services.protocol debe ser TCP o UDP.")
-            port = s.get("port")
-            if not isinstance(port, int) or port < 1 or port > 65535:
-                raise ValidationError("services.port debe ser entero 1..65535.")
-
-    if "time" in condition and condition["time"] is not None:
-        t = condition["time"]
-        if not isinstance(t, dict):
-            raise ValidationError("condition.time debe ser un objeto JSON.")
-        days = t.get("days")
-        start = t.get("start")
-        end = t.get("end")
-
-        if not isinstance(days, list) or not days:
-            raise ValidationError("condition.time.days debe ser lista no vacía.")
-        if any(d not in DAYS for d in days):
-            raise ValidationError("condition.time.days inválido (use MON..SUN).")
-
-        if not _is_time_hhmm(start) or not _is_time_hhmm(end):
-            raise ValidationError("condition.time.start y end deben tener formato HH:MM.")
-
-        tz = t.get("tz")
-        if tz is None or not isinstance(tz, str) or not tz.strip():
-            raise ValidationError("condition.time.tz es obligatorio (ej: America/Guayaquil).")
-DAYS = {"MON","TUE","WED","THU","FRI","SAT","SUN"}
-
-def _is_time_hhmm(value: str) -> bool:
-    return bool(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(value)))
-
-def validate_rule_condition(condition: dict):
-    if not isinstance(condition, dict):
-        raise ValidationError("condition debe ser un objeto JSON (dict).")
-
-    if condition.get("version") != 1:
-        raise ValidationError("condition.version debe ser 1.")
-
-    note = condition.get("note")
-    if not isinstance(note, str) or not note.strip():
-        raise ValidationError("condition.note es obligatorio y debe ser texto.")
-
-    match = condition.get("match")
-    if not isinstance(match, dict):
-        raise ValidationError("condition.match es obligatorio y debe ser un objeto JSON.")
-
-    allowed_match_keys = {"zones", "url_categories", "urls", "http_methods", "services"}
-    unknown = set(match.keys()) - allowed_match_keys
-    if unknown:
-        raise ValidationError(f"condition.match contiene claves no permitidas: {sorted(unknown)}")
-
-    has_any = any(match.get(k) for k in allowed_match_keys)
-    if not has_any:
-        raise ValidationError("condition.match debe tener al menos un criterio (zones/url_categories/urls/http_methods/services).")
-
-    if "zones" in match and not isinstance(match["zones"], list):
-        raise ValidationError("condition.match.zones debe ser lista de zone_id.")
-    if "url_categories" in match and not isinstance(match["url_categories"], list):
-        raise ValidationError("condition.match.url_categories debe ser lista de category_id.")
-    if "urls" in match and not isinstance(match["urls"], list):
-        raise ValidationError("condition.match.urls debe ser lista de strings (dominios/urls).")
-    if "http_methods" in match:
-        if not isinstance(match["http_methods"], list) or not all(isinstance(x, str) for x in match["http_methods"]):
-            raise ValidationError("condition.match.http_methods debe ser lista de strings (GET/POST...).")
-    if "services" in match:
-        if not isinstance(match["services"], list):
-            raise ValidationError("condition.match.services debe ser lista.")
-        for s in match["services"]:
-            if not isinstance(s, dict):
-                raise ValidationError("Cada item de services debe ser objeto {protocol, port}.")
-            if s.get("protocol") not in {"TCP","UDP"}:
-                raise ValidationError("services.protocol debe ser TCP o UDP.")
-            port = s.get("port")
-            if not isinstance(port, int) or port < 1 or port > 65535:
-                raise ValidationError("services.port debe ser entero 1..65535.")
-
-    if "time" in condition and condition["time"] is not None:
-        t = condition["time"]
-        if not isinstance(t, dict):
-            raise ValidationError("condition.time debe ser un objeto JSON.")
-        days = t.get("days")
-        start = t.get("start")
-        end = t.get("end")
-
-        if not isinstance(days, list) or not days:
-            raise ValidationError("condition.time.days debe ser lista no vacía.")
-        if any(d not in DAYS for d in days):
-            raise ValidationError("condition.time.days inválido (use MON..SUN).")
-
-        if not _is_time_hhmm(start) or not _is_time_hhmm(end):
-            raise ValidationError("condition.time.start y end deben tener formato HH:MM.")
-
-        tz = t.get("tz")
-        if tz is None or not isinstance(tz, str) or not tz.strip():
-            raise ValidationError("condition.time.tz es obligatorio (ej: America/Guayaquil).")
