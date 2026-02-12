@@ -59,8 +59,8 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": "maindb",
-        "USER": "rimb",
-        "PASSWORD": "1754298626",
+        "USER": "postgres",
+        "PASSWORD": "aiypwzqp",
         "HOST": os.getenv("POSTGRES_HOST", "127.0.0.1"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
         "OPTIONS": {
@@ -97,3 +97,13 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# Note: login redirects removed — dashboard is intentionally public for Alex's demo
+
+# Squid integration (paths outside the project). Set these via environment variables if needed.
+# WARNING: reading /etc/squid/* may require elevated permissions on the host.
+SQUID_CONFIG_PATH = os.getenv("SQUID_CONFIG_PATH", "/etc/squid/squid.conf")
+SQUID_BLOCKED_LIST = os.getenv("SQUID_BLOCKED_LIST", "/etc/squid/lists/blocked_domains.lst")
+# Allow the Django process to attempt reading the Squid files. Keep False in production if permissions are restricted.
+SQUID_ALLOW_READ = os.getenv("SQUID_ALLOW_READ", "false").lower() in ("1", "true", "yes")

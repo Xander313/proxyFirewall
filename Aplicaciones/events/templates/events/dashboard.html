@@ -1,0 +1,261 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard - Evidencias</title>
+    <link rel="stylesheet" href="{% static 'assets/css/bootstrap.css' %}" />
+    <style>
+      .card { margin-bottom: 1rem; }
+        .text-end { text-align: right; }
+    </style>
+  </head>
+  <body class="p-4">
+    <div class="container">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h1 class="h3">Dashboard de evidencias</h1>
+          <p class="text-muted mb-0">Resumen en tiempo real — bloqueos, tráfico y caché</p>
+        </div>
+          <div class="text-end">
+          <small class="text-muted">DB:</small>
+          {% if db_status.ok %}
+            <span class="badge bg-success">Conectada</span>
+          {% else %}
+            <span class="badge bg-danger">Error</span>
+          {% endif %}
+        </div>
+        </div>
+        <div class="row align-items-center mb-4">
+          <div class="col-md-8">
+            <h1 class="h3 mb-0">Proxy Firewall — Dashboard de evidencias</h1>
+            <p class="text-muted small mt-1">Interfaz para auditoría: bloqueos, tráfico y estado del proxy</p>
+          </div>
+          <div class="col-md-4 text-end">
+            <div class="btn-group" role="group">
+              <button id="btnRefresh" class="btn btn-outline-secondary btn-sm" title="Refrescar">🔄 Refrescar</button>
+              <button id="btnExport" class="btn btn-outline-primary btn-sm" title="Exportar tabla a CSV">⬇️ Export CSV</button>
+            </div>
+            <div class="mt-2">
+              <small class="text-muted">DB:</small>
+              {% if db_status.ok %}
+                <span class="badge bg-success">Conectada</span>
+              {% else %}
+                <span class="badge bg-danger" title="{{ db_status.msg }}">Error</span>
+              {% endif %}
+            </div>
+          </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-3">
+          <div class="card shadow-sm p-3">
+            <div class="d-flex align-items-center">
+              <div class="me-3 display-6 text-primary">{{ total_requests }}</div>
+                <div class="text-truncate">
+                <small class="text-muted">Total requests</small>
+                <div class="small">Trafico total registrado</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <div class="card shadow-sm p-3 border-danger">
+            <div class="d-flex align-items-center">
+              <div class="me-3 display-6 text-danger">{{ total_blocked }}</div>
+              <div>
+                <small class="text-muted">Bloqueos (DENY)</small>
+                <div class="small">Eventos que resultaron en bloqueo</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <div class="card shadow-sm p-3">
+            <div class="d-flex align-items-center">
+              <div class="me-3 display-6 text-success">{{ cache_entries_count }}</div>
+              <div>
+                <small class="text-muted">Cache entries</small>
+                <div class="small">Entradas en caché</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <div class="card shadow-sm p-3">
+            <small class="text-muted">Cache stats</small>
+            <ul class="list-unstyled mb-0 mt-2">
+              {% for k,v in cache_stats.items %}
+                <li><strong>{{ k|default:'UNKNOWN' }}</strong>: {{ v }}</li>
+              {% empty %}
+                <li>-</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mt-3">
+        <div class="col-md-12">
+          <div class="card p-3">
+            <h5>Squid integration status</h5>
+            <p>
+              Config path: <strong>{{ squid_status.config_path }}</strong>
+              {% if squid_status.config_exists %}
+                <span class="text-success">(exists)</span>
+              {% else %}
+                <span class="text-warning">(missing)</span>
+              {% endif %}
+            </p>
+            <p>
+              Blocked list: <strong>{{ squid_status.blocked_list_path }}</strong>
+              {% if squid_status.blocked_exists %}
+                <span class="text-success">({{ squid_status.blocked_count }} entries)</span>
+                {% if squid_status.blocked_mtime %}
+                  <small class="text-muted">modified: {{ squid_status.blocked_mtime }}</small>
+                {% endif %}
+              {% else %}
+                <span class="text-danger">(not available)</span>
+              {% endif %}
+            </p>
+            {% if squid_status.blocked_sample %}
+              <p><strong>Sample domains:</strong>
+                {% for d in squid_status.blocked_sample|slice:":10" %}{{ d }}{% if not forloop.last %}, {% endif %}{% endfor %}
+              </p>
+            {% endif %}
+            {% if squid_status.errors %}
+              <p class="text-danger">Errors: {{ squid_status.errors|join:", " }}</p>
+            {% endif %}
+            {% if not squid_status.allow_read %}
+              <p class="text-muted">Reading squid files is disabled in settings (SQUID_ALLOW_READ=false)</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="row mt-4">
+        <div class="col-md-6">
+          <div class="card p-3 shadow-sm">
+            <h5>Sitios más bloqueados</h5>
+            <canvas id="chartBlockedSites" width="400" height="250"></canvas>
+            <ol class="mt-2">
+              {% for s in top_blocked_sites %}
+                <li>{{ s.host }} — <span class="badge bg-danger">{{ s.count }}</span></li>
+              {% empty %}
+                <li>No hay bloqueos aún</li>
+              {% endfor %}
+            </ol>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="card p-3 shadow-sm">
+            <h5>IPs / Usuarios más activos</h5>
+            <canvas id="chartTopIPs" width="400" height="250"></canvas>
+            <ol class="mt-2">
+              {% for i in top_ips %}
+                <li>{{ i.ip }} — <span class="badge bg-primary">{{ i.count }}</span></li>
+              {% empty %}
+                <li>No hay actividad aún</li>
+              {% endfor %}
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mt-4">
+        <div class="col-md-8">
+          <div class="card p-3 shadow-sm">
+            <h5>Requests recientes</h5>
+            <div class="table-responsive">
+              <table class="table table-sm table-striped">
+                <thead>
+                  <tr>
+                    <th>ts</th>
+                    <th>client</th>
+                    <th>url</th>
+                    <th>verdict</th>
+                    <th>reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in recent_requests %}
+                  <tr>
+                    <td>{{ r.ts }}</td>
+                    <td>{{ r.client_ip }}</td>
+                    <td>{% if r.url %}{{ r.url.host }}{{ r.url.path }}{% else %}-{% endif %}</td>
+                    <td>{% if r.verdict == 'DENY' %}<span class="badge bg-danger">DENY</span>{% else %}<span class="badge bg-success">ALLOW</span>{% endif %}</td>
+                    <td>{{ r.block_reason|default:'-' }}</td>
+                  </tr>
+                  {% empty %}
+                  <tr><td colspan="5">No hay requests</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="card p-3 shadow-sm">
+            <h5>Cache HIT / MISS</h5>
+            <canvas id="chartCache" width="400" height="200"></canvas>
+            <div class="mt-3">
+              {% for k,v in cache_stats.items %}
+                <div class="d-flex justify-content-between"><div>{{ k }}</div><div><strong>{{ v }}</strong></div></div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="{% static 'assets/plugins/Chart.js/Chart.min.js' %}"></script>
+    <script>
+      const chartData = JSON.parse('{{ chart_data|escapejs }}');
+
+      // Blocked sites chart
+      const blockedSitesLabels = chartData.top_blocked_sites.map((x) => x.host);
+      const blockedSitesValues = chartData.top_blocked_sites.map((x) => x.count);
+
+      new Chart(document.getElementById('chartBlockedSites').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: blockedSitesLabels,
+          datasets: [{ label: 'Bloqueos', data: blockedSitesValues, backgroundColor: 'rgba(220,53,69,0.6)' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // Top IPs
+      const topIPsLabels = chartData.top_ips.map((x) => x.ip);
+      const topIPsValues = chartData.top_ips.map((x) => x.count);
+
+      new Chart(document.getElementById('chartTopIPs').getContext('2d'), {
+        type: 'horizontalBar',
+        data: {
+          labels: topIPsLabels,
+          datasets: [{ label: 'Requests', data: topIPsValues, backgroundColor: 'rgba(0,123,255,0.6)' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // Cache pie
+      const cacheLabels = Object.keys(chartData.cache_stats || {});
+      const cacheValues = cacheLabels.map((k) => chartData.cache_stats[k]);
+
+      new Chart(document.getElementById('chartCache').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: cacheLabels,
+          datasets: [{ data: cacheValues, backgroundColor: ['#28a745', '#ffc107', '#6c757d', '#17a2b8', '#dc3545'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    </script>
+  </body>
+</html>
