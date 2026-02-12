@@ -2,4 +2,6 @@ from django.apps import AppConfig
 
 
 class ControlConfig(AppConfig):
-    name = 'control'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "Aplicaciones.control"
+    label = "control"
