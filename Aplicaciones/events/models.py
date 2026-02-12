@@ -1,15 +1,17 @@
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 
 from Aplicaciones.control.models import (
+    HttpMethod,
     NetProtocol,
-    RuleAction,
     Rule,
+    RuleAction,
     Service,
+    SoftDeleteModel,
     Url,
     User,
     Verdict,
-    HttpMethod,
     Zone,
 )
 
@@ -30,7 +32,7 @@ class LogLevel(models.TextChoices):
     CRITICAL = "CRITICAL", "CRITICAL"
 
 
-class Request(models.Model):
+class Request(SoftDeleteModel):
     request_id = models.BigAutoField(primary_key=True)
     ts = models.DateTimeField()
     client_ip = models.GenericIPAddressField(protocol="both", unpack_ipv4=True)
@@ -83,14 +85,13 @@ class Request(models.Model):
     block_reason = models.TextField(blank=True, default="")
 
     class Meta:
-        managed = False
         db_table = "requests"
 
     def __str__(self):
         return f"Request {self.request_id} [{self.verdict}]"
 
 
-class RuleMatch(models.Model):
+class RuleMatch(SoftDeleteModel):
     match_id = models.BigAutoField(primary_key=True)
     request = models.ForeignKey(
         Request,
@@ -108,14 +109,13 @@ class RuleMatch(models.Model):
     matched_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        managed = False
         db_table = "rule_match"
 
     def __str__(self):
         return f"Match {self.match_id}: rule={self.rule_id} action={self.action}"
 
 
-class SecurityAlert(models.Model):
+class SecurityAlert(SoftDeleteModel):
     alert_id = models.BigAutoField(primary_key=True)
     request = models.ForeignKey(
         Request,
@@ -132,14 +132,13 @@ class SecurityAlert(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        managed = False
         db_table = "security_alert"
 
     def __str__(self):
         return f"Alert {self.alert_id} sev={self.severity}"
 
 
-class FirewallEvent(models.Model):
+class FirewallEvent(SoftDeleteModel):
     fw_id = models.BigAutoField(primary_key=True)
     request = models.ForeignKey(
         Request,
@@ -176,14 +175,13 @@ class FirewallEvent(models.Model):
     nat_info = models.JSONField(null=True, blank=True)
 
     class Meta:
-        managed = False
         db_table = "firewall_event"
 
     def __str__(self):
         return f"FW {self.fw_id}: {self.action}"
 
 
-class CacheEntry(models.Model):
+class CacheEntry(SoftDeleteModel):
     cache_id = models.BigAutoField(primary_key=True)
     url = models.ForeignKey(
         Url,
@@ -196,17 +194,20 @@ class CacheEntry(models.Model):
     expiration_time = models.DateTimeField()
 
     class Meta:
-        managed = False
         db_table = "cache_entry"
         constraints = [
-            models.UniqueConstraint(fields=["url"], name="cache_entry_url_id_key")
+            models.UniqueConstraint(
+                fields=["url"],
+                condition=Q(is_delete=False),
+                name="cache_entry_url_active_uniq",
+            )
         ]
 
     def __str__(self):
         return f"Cache {self.cache_id} for URL {self.url_id}"
 
 
-class ErrorLog(models.Model):
+class ErrorLog(SoftDeleteModel):
     error_id = models.BigAutoField(primary_key=True)
     request = models.ForeignKey(
         Request,
@@ -222,7 +223,6 @@ class ErrorLog(models.Model):
     component = models.CharField(max_length=100)
 
     class Meta:
-        managed = False
         db_table = "error_log"
 
     def __str__(self):
