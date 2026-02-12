@@ -1,3 +1,5 @@
 from django.shortcuts import render
 
-# Create your views here.
+
+def control_index(request):
+    return render(request, "control/control_index.html")
