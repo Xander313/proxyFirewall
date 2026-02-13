@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Listado de Politicas{% endblock %}
+{% block sidebar_menu %}
+{% include 'partials/sidebar_menu.html' %}
+{% endblock %}
+{% block content %}
+<main class="container-fluid py-3">
+  <h1 class="text-center">Listado de Politicas</h1><hr>
+  {% if messages %}{% for message in messages %}<div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
+  <div class="mb-3 text-end"><a href="{% url 'policy_create' %}" class="btn btn-primary"><i class="fa fa-plus"></i> Agregar Politica</a></div>
+  <table id="tabla_politicas" class="table table-hover align-middle w-100 tabla-control">
+    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>Activa</th><th>Acciones</th></tr></thead>
+    <tbody>
+      {% for p in policies %}
+      <tr>
+        <td>{{ p.policy_id }}</td><td>{{ p.name }}</td><td>{{ p.type }}</td><td>{{ p.enabled|yesno:"Activa,Inactiva" }}</td>
+        <td><a href="{% url 'policy_edit' p.policy_id %}" class="btn btn-outline-warning btn-sm"><i class="fa fa-pen icono-editar"></i></a>
+          <form method="post" action="{% url 'policy_delete' p.policy_id %}" class="js-form-eliminar" style="display:inline;">{% csrf_token %}<button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa fa-trash icono-eliminar"></i></button></form></td>
+      </tr>
+      {% empty %}<tr><td colspan="5" class="text-center">No hay politicas registradas.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</main>
+{% endblock %}
+{% block extra_css %}<style>.tabla-control { border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 8px 20px rgba(0,0,0,.06);} .tabla-control thead th { background:#222d32 !important; color:#fff !important; border-bottom:0 !important; font-weight:700; white-space:nowrap;} .tabla-control tbody tr:hover { background:rgba(34,45,50,.06) !important; } .dt-buttons .btn { border-radius:10px !important; margin-right:6px; font-weight:600; } .dataTables_filter input, .dataTables_length select { border-radius:10px !important; }</style>{% endblock %}
+{% block extra_scripts %}<script>$(function(){ inicializarTablaControl("#tabla_politicas", 0); });</script>{% endblock %}

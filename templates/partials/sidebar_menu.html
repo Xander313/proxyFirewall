@@ -1,0 +1,11 @@
+<li class="sidebar-header">NAVEGACION</li>
+<li>
+  <a href="/control/" {% if request.path|slice:":9" == "/control/" %}class="active"{% endif %}>
+    <i class="zmdi zmdi-view-dashboard"></i> <span>Administracion</span>
+  </a>
+</li>
+<li>
+  <a href="{% url 'events:dashboard' %}" {% if request.path|slice:":8" == "/events/" %}class="active"{% endif %}>
+    <i class="zmdi zmdi-chart"></i> <span>Eventos</span>
+  </a>
+</li>

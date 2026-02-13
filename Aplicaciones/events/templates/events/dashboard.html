@@ -4,13 +4,7 @@
 {% block title %}Dashboard - Proxy Firewall{% endblock %}
 
 {% block sidebar_menu %}
-<li class="sidebar-header">NAVEGACION</li>
-<li>
-  <a href="/control/" class="active">
-    <i class="zmdi zmdi-view-dashboard"></i> <span>Control</span>
-  </a>
-</li>
-{{ block.super }}
+{% include 'partials/sidebar_menu.html' %}
 {% endblock %}
 
 {% block content %}

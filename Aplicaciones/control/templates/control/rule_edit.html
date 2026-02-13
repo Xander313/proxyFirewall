@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Regla | Control{% endblock %}
+
+{% block sidebar_menu %}
+{% include 'partials/sidebar_menu.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="row pt-3">
+  <div class="col-lg-10">
+    <div class="card">
+      <div class="card-body">
+        <h4>Editar Regla #{{ rule.rule_id }}</h4>
+        <form method="post">
+          {% csrf_token %}
+          {{ form.as_p }}
+          <button class="btn btn-light" type="submit">Guardar cambios</button>
+          <a href="/control/" class="btn btn-outline-light">Volver a Control</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

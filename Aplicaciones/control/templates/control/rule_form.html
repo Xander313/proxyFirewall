@@ -1,0 +1,427 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if rule %}Editar Regla{% else %}Crear Regla{% endif %}{% endblock %}
+
+{% block sidebar_menu %}
+{% include 'partials/sidebar_menu.html' %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  :root {
+    --sidebar: #222d32;
+    --bg: #ecf0f5;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --text: #111827;
+    --muted: #6b7280;
+    --accent: #3c8dbc;
+    --accent2: #2e6f91;
+    --danger: #e74c3c;
+    --success: #27ae60;
+  }
+
+  .page-title {
+    color: #e8edf5;
+    text-shadow: 0 2px 12px rgba(9, 30, 66, 0.35);
+    font-weight: 800;
+  }
+
+  .rule-card {
+    border: 0;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+  }
+
+  .rule-card .card-header {
+    background: linear-gradient(135deg, var(--sidebar) 0%, #1b2428 100%);
+    color: #fff;
+    border: 0;
+    padding: 18px 22px;
+    font-weight: 700;
+  }
+
+  .rule-card .card-body {
+    padding: 22px;
+  }
+
+  .soft-hr {
+    border-top: 2px solid rgba(34, 45, 50, 0.12);
+    opacity: 1;
+  }
+
+  .form-label {
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .form-control,
+  .form-select {
+    border-radius: 12px;
+    border: 2px solid var(--border);
+    padding: 12px 14px;
+    transition: all 0.2s ease;
+    background: #fff;
+    color: var(--text) !important;
+  }
+
+  .form-select {
+    background-color: #fff !important;
+  }
+
+  .form-control::placeholder {
+    color: #6b7280;
+    opacity: 1;
+  }
+
+  .form-select option {
+    color: #111827 !important;
+    background-color: #ffffff !important;
+  }
+
+  .form-select optgroup {
+    color: #111827 !important;
+    background-color: #ffffff !important;
+  }
+
+  input[type="time"] {
+    color: #111827 !important;
+    background-color: #fff !important;
+  }
+
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    opacity: 0.85;
+    filter: invert(18%);
+  }
+
+  .form-control:focus,
+  .form-select:focus {
+    border-color: rgba(60, 141, 188, 0.55);
+    box-shadow: 0 0 0 0.25rem rgba(60, 141, 188, 0.15);
+  }
+
+  .form-check-input:focus {
+    border-color: rgba(60, 141, 188, 0.55);
+    box-shadow: 0 0 0 0.25rem rgba(60, 141, 188, 0.15);
+  }
+
+  .help-text {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .invalid-feedback {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.875rem;
+  }
+
+  .is-invalid {
+    border-color: var(--danger) !important;
+  }
+
+  .dias-box {
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    background: #fff;
+  }
+
+  .dias-box .form-check-label {
+    color: #111827;
+    font-weight: 600;
+  }
+
+  .dias-box .form-check-input {
+    border-color: #6b7280;
+  }
+
+  .days-list {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(70px, 1fr));
+    gap: 8px;
+  }
+
+  .day-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #111827;
+    font-weight: 600;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .day-label .day-check {
+    margin: 0;
+  }
+
+  @media (max-width: 992px) {
+    .days-list {
+      grid-template-columns: repeat(4, minmax(70px, 1fr));
+    }
+  }
+
+  @media (max-width: 576px) {
+    .days-list {
+      grid-template-columns: repeat(2, minmax(90px, 1fr));
+    }
+  }
+
+  .dias-box.is-invalid {
+    border-color: var(--danger) !important;
+  }
+
+  .btn {
+    border-radius: 12px;
+    font-weight: 800;
+    border-width: 2px;
+  }
+
+  .btn-success {
+    background: linear-gradient(135deg, var(--success) 0%, #2ecc71 100%);
+    border: none;
+  }
+
+  .btn-success:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(39, 174, 96, 0.18);
+  }
+
+  .btn-secondary {
+    border: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container-fluid py-3">
+  <h1 class="text-center page-title">{% if rule %}Editar Regla #{{ rule.rule_id }}{% else %}Crear Regla{% endif %}</h1>
+  <hr>
+
+  <div class="card rule-card">
+    <div class="card-header">
+      <i class="fa fa-shield-alt me-2"></i>Configuracion de Regla
+    </div>
+    <div class="card-body">
+      <hr class="soft-hr mb-4">
+
+      <form method="post" id="form_rule" novalidate>
+        {% csrf_token %}
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="policy">Politica</label>
+            <select name="policy" id="policy" class="form-select" required>
+              <option value="">Seleccione...</option>
+              {% for p in policies %}
+              <option value="{{ p.policy_id }}" {% if initial.policy_id == p.policy_id|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label" for="action">Accion</label>
+            <select name="action" id="action" class="form-select" required>
+              <option value="DENY" {% if initial.action == 'DENY' %}selected{% endif %}>DENY (Bloquear)</option>
+              <option value="ALLOW" {% if initial.action == 'ALLOW' %}selected{% endif %}>ALLOW (Permitir)</option>
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label" for="priority">Prioridad</label>
+            <input type="number" min="1" name="priority" id="priority" value="{{ initial.priority }}" class="form-control" required>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label" for="url_category">Categoria URL</label>
+            <select name="url_category" id="url_category" class="form-select" required>
+              <option value="">Seleccione...</option>
+              {% for c in categories %}
+              <option value="{{ c.category_id }}" {% if initial.url_category == c.category_id|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label" for="note">Nota</label>
+            <input type="text" name="note" id="note" value="{{ initial.note }}" class="form-control" maxlength="300" required>
+            <small class="help-text">Explica brevemente el motivo de la regla.</small>
+          </div>
+
+          <div class="col-12 mt-2">
+            <label class="form-label">Horario (opcional)</label>
+            <div id="dias_box" class="dias-box days-list">
+              {% for d in week_days %}
+              <label class="day-label">
+                <span>{% if d == 'MON' %}LUN{% elif d == 'TUE' %}MAR{% elif d == 'WED' %}MIE{% elif d == 'THU' %}JUE{% elif d == 'FRI' %}VIE{% elif d == 'SAT' %}SAB{% else %}DOM{% endif %}</span>
+                <input class="form-check-input day-check" type="checkbox" name="days" value="{{ d }}" {% if d in initial.days %}checked{% endif %}>
+              </label>
+              {% endfor %}
+            </div>
+            <input type="hidden" id="days_validator" name="days_validator" value="1">
+            <div id="days_error"></div>
+            <small class="help-text d-block mt-2">Si defines horario, debes completar dias, inicio, fin y zona horaria.</small>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label" for="start">Inicio</label>
+            <input type="time" name="start" id="start" value="{{ initial.start }}" class="form-control">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label" for="end">Fin</label>
+            <input type="time" name="end" id="end" value="{{ initial.end }}" class="form-control">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label" for="tz">Zona horaria</label>
+            <input type="text" name="tz" id="tz" value="{{ initial.tz }}" class="form-control" placeholder="America/Guayaquil">
+          </div>
+
+          <div class="col-12">
+            <div class="form-check mb-2">
+              <input type="checkbox" class="form-check-input" id="enabled" name="enabled" {% if initial.enabled %}checked{% endif %}>
+              <label class="form-check-label" for="enabled">Regla activa</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex flex-column flex-md-row gap-2 mt-3">
+          <button type="submit" class="btn btn-success px-4">
+            <i class="fa fa-save me-2"></i>Guardar
+          </button>
+          <a href="{% url 'rule_list' %}" class="btn btn-secondary px-4">
+            <i class="fa fa-times me-2"></i>Cancelar
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.5/dist/jquery.validate.min.js"></script>
+<script>
+  $(function () {
+    function hasAnyHorarioInput() {
+      const hasDays = $("input[name='days']:checked").length > 0;
+      const hasStart = $.trim($("#start").val()) !== "";
+      const hasEnd = $.trim($("#end").val()) !== "";
+      return hasDays || hasStart || hasEnd;
+    }
+
+    $.validator.addMethod("tzFormat", function (value, element) {
+      if (this.optional(element)) return true;
+      return /^[A-Za-z_]+\/[A-Za-z_]+(?:\/[A-Za-z_]+)?$/.test(value);
+    }, "La zona horaria debe tener formato Region/Ciudad.");
+
+    $.validator.addMethod("daysRequiredWhenTime", function () {
+      if (!hasAnyHorarioInput()) {
+        return true;
+      }
+      return $("input[name='days']:checked").length > 0;
+    }, "Selecciona al menos un dia para el horario.");
+
+    function placeBootstrapError(error, element) {
+      error.addClass("invalid-feedback");
+      if (element.attr("name") === "days_validator") {
+        $("#days_error").html(error);
+      } else {
+        error.insertAfter(element);
+      }
+    }
+
+    const validator = $("#form_rule").validate({
+      ignore: [],
+      rules: {
+        policy: { required: true },
+        action: { required: true },
+        priority: { required: true, number: true, min: 1, max: 9999 },
+        url_category: { required: true },
+        note: { required: true, minlength: 5, maxlength: 300 },
+        start: {
+          required: {
+            depends: function () { return hasAnyHorarioInput(); }
+          }
+        },
+        end: {
+          required: {
+            depends: function () { return hasAnyHorarioInput(); }
+          }
+        },
+        tz: {
+          required: {
+            depends: function () { return hasAnyHorarioInput(); }
+          },
+          tzFormat: true,
+          maxlength: 80
+        },
+        days_validator: {
+          daysRequiredWhenTime: true
+        }
+      },
+      messages: {
+        policy: { required: "Selecciona una politica." },
+        action: { required: "Selecciona una accion." },
+        priority: {
+          required: "Ingresa la prioridad.",
+          number: "La prioridad debe ser numerica.",
+          min: "La prioridad minima es 1.",
+          max: "La prioridad maxima es 9999."
+        },
+        url_category: { required: "Selecciona una categoria URL." },
+        note: {
+          required: "La nota es obligatoria.",
+          minlength: "La nota debe tener al menos 5 caracteres.",
+          maxlength: "La nota no puede superar 300 caracteres."
+        },
+        start: { required: "Ingresa la hora de inicio." },
+        end: { required: "Ingresa la hora de fin." },
+        tz: {
+          required: "Ingresa la zona horaria.",
+          maxlength: "La zona horaria no puede superar 80 caracteres."
+        }
+      },
+      errorElement: "div",
+      errorPlacement: placeBootstrapError,
+      highlight: function (element) {
+        const $el = $(element);
+        if ($el.attr("name") === "days_validator") {
+          $("#dias_box").addClass("is-invalid");
+        } else {
+          $el.addClass("is-invalid");
+        }
+      },
+      unhighlight: function (element) {
+        const $el = $(element);
+        if ($el.attr("name") === "days_validator") {
+          $("#dias_box").removeClass("is-invalid");
+        } else {
+          $el.removeClass("is-invalid");
+        }
+      }
+    });
+
+    $("input[name='days'], #start, #end, #tz").on("change keyup", function () {
+      validator.element("#days_validator");
+      if (!hasAnyHorarioInput()) {
+        $("#start, #end, #tz").removeClass("is-invalid");
+      }
+    });
+  });
+</script>
+{% endblock %}

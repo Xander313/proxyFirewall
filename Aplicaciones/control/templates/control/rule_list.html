@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Listado de Reglas{% endblock %}
+
+{% block sidebar_menu %}
+{% include 'partials/sidebar_menu.html' %}
+{% endblock %}
+
+{% block content %}
+<main class="container-fluid py-3">
+  <h1 class="text-center">Listado de Reglas</h1>
+  <hr>
+
+  <div class="mb-3 text-end">
+    <a href="{% url 'rule_create' %}" class="btn btn-primary"><i class="fa fa-plus"></i> Crear Regla</a>
+    <form method="post" action="{% url 'rule_apply' %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-success"><i class="fa fa-check"></i> Aplicar</button>
+    </form>
+  </div>
+
+  <table id="tabla_rules" class="table table-hover align-middle w-100 tabla-control">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Politica</th>
+        <th>Prioridad</th>
+        <th>Accion</th>
+        <th>Horario</th>
+        <th>Activa</th>
+        <th>Nota</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rules %}
+      <tr>
+        <td>{{ r.rule_id }}</td>
+        <td>{{ r.policy.name }}</td>
+        <td>{{ r.priority }}</td>
+        <td>{{ r.action }}</td>
+        <td>{{ r.schedule_display }}</td>
+        <td>{{ r.enabled|yesno:"Activa,Inactiva" }}</td>
+        <td>{{ r.note|default:"-" }}</td>
+        <td>
+          <a href="{% url 'rule_edit' r.rule_id %}" class="btn btn-outline-warning btn-sm"><i class="fa fa-pen icono-editar"></i></a>
+          <form method="post" action="{% url 'rule_toggle' r.rule_id %}" class="js-form-confirmar-estado" data-nombre="Regla {{ r.rule_id }}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa fa-power-off icono-estado"></i></button>
+          </form>
+          <form method="post" action="{% url 'rule_apply' %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-success btn-sm" title="Exportar y aplicar reglas en Squid">
+              <i class="fa fa-check"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="text-center">No hay reglas registradas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</main>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tabla-control { border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 8px 20px rgba(0,0,0,.06); }
+  .tabla-control thead th { background:#222d32 !important; color:#fff !important; border-bottom:0 !important; font-weight:700; white-space:nowrap; }
+  .tabla-control tbody tr:hover { background:rgba(34,45,50,.06) !important; }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  $(function () {
+    inicializarTablaControl("#tabla_rules", 0);
+  });
+</script>
+{% endblock %}

@@ -1,12 +1,101 @@
 {% extends 'base.html' %}
 
-{% block title %}Control | Proxy Firewall{% endblock %}
+{% block title %}Panel de Control | Proxy Firewall{% endblock %}
 
 {% block sidebar_menu %}
-<li class="sidebar-header">NAVEGACION</li>
-<li>
-  <a href="/control/" class="active">
-    <i class="zmdi zmdi-view-dashboard"></i> <span>Control</span>
-  </a>
-</li>
+{% include 'partials/sidebar_menu.html' %}
+{% endblock %}
+
+{% block content %}
+<main class="container-fluid py-3">
+  <h1 class="text-center">Panel de Administracion</h1>
+  <hr>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row mb-4">
+    <div class="col-md-3 mb-2"><a class="btn btn-primary w-100" href="{% url 'rule_list' %}">Reglas</a></div>
+    <div class="col-md-3 mb-2"><a class="btn btn-primary w-100" href="{% url 'policy_list' %}">Politicas</a></div>
+    <div class="col-md-3 mb-2"><a class="btn btn-primary w-100" href="{% url 'category_list' %}">Categorias</a></div>
+    <div class="col-md-3 mb-2"><a class="btn btn-primary w-100" href="{% url 'url_list' %}">URLs</a></div>
+    <div class="col-md-3 mb-2"><a class="btn btn-primary w-100" href="{% url 'method_list' %}">Metodos HTTP</a></div>
+    <div class="col-md-3 mb-2"><a class="btn btn-primary w-100" href="{% url 'zone_list' %}">Zonas</a></div>
+    <div class="col-md-3 mb-2"><a class="btn btn-primary w-100" href="{% url 'service_list' %}">Servicios</a></div>
+  </div>
+
+  <div class="card p-3 mb-4">
+    <h5>Exportacion de reglas a Squid</h5>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="exportar_squid">
+      <button class="btn btn-success" type="submit"><i class="fa fa-download"></i> Exportar reglas</button>
+      <small class="d-block mt-2">Salida: <code>{{ export_path }}</code></small>
+    </form>
+  </div>
+
+  <table id="tabla_reglas" class="table table-hover align-middle w-100 tabla-control">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Politica</th>
+        <th>Prioridad</th>
+        <th>Accion</th>
+        <th>Activa</th>
+        <th>Nota</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rules %}
+      <tr>
+        <td>{{ r.rule_id }}</td>
+        <td>{{ r.policy.name }}</td>
+        <td>{{ r.priority }}</td>
+        <td>{{ r.get_action_display }}</td>
+        <td>{{ r.enabled|yesno:"Activa,Inactiva" }}</td>
+        <td>{{ r.note|default:"-" }}</td>
+        <td>
+          <a href="{% url 'rule_edit' r.rule_id %}" class="btn btn-outline-warning btn-sm"><i class="fa fa-pen icono-editar"></i></a>
+          <form method="post" class="js-form-confirmar-estado" data-nombre="Regla {{ r.rule_id }}" style="display:inline;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="alternar_regla">
+            <input type="hidden" name="rule_id" value="{{ r.rule_id }}">
+            <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fa fa-power-off icono-estado"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="text-center">No hay reglas registradas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="card p-3 mt-4">
+    <h5>Vista previa de archivo .conf</h5>
+    <pre class="p-3" style="background:#111; color:#ddd; border-radius:8px;">{% if preview_lines %}{% for line in preview_lines %}{{ line }}
+{% endfor %}{% else %}Sin archivo generado aun.{% endif %}</pre>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tabla-control { border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 8px 20px rgba(0,0,0,.06); }
+  .tabla-control thead th { background:#222d32 !important; color:#fff !important; border-bottom:0 !important; font-weight:700; white-space:nowrap; }
+  .tabla-control tbody tr:hover { background:rgba(34,45,50,.06) !important; }
+  .dt-buttons .btn { border-radius:10px !important; margin-right:6px; font-weight:600; }
+  .dataTables_filter input, .dataTables_length select { border-radius:10px !important; }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  $(function () {
+    inicializarTablaControl("#tabla_reglas", 0);
+  });
+</script>
 {% endblock %}

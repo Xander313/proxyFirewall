@@ -3,7 +3,6 @@ from django.db.models import Q
 from django.db.models.functions import Upper
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-import re
 
 
 # -------------------------
@@ -76,10 +75,10 @@ class Verdict(models.TextChoices):
 
 
 class RuleAction(models.TextChoices):
-    ALLOW = "ALLOW", "ALLOW"
-    DENY = "DENY", "DENY"
-    ALERT = "ALERT", "ALERT"
-    LOG_ONLY = "LOG_ONLY", "LOG_ONLY"
+    ALLOW = "ALLOW", "PERMITIR"
+    DENY = "DENY", "BLOQUEAR"
+    ALERT = "ALERT", "ALERTAR"
+    LOG_ONLY = "LOG_ONLY", "SOLO_REGISTRO"
 
 
 # -------------------------
@@ -198,92 +197,10 @@ class Policy(SoftDeleteModel):
 
 
 # -------------------------
-# Rule.condition Standard + Validation (JSONB)
+# Rule schedule constants
 # -------------------------
-DAYS = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
-
-
-def _is_time_hhmm(value: str) -> bool:
-    return bool(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(value)))
-
-
-def validate_rule_condition(condition: dict):
-    if not isinstance(condition, dict):
-        raise ValidationError("condition debe ser un objeto JSON (dict).")
-
-    # version
-    if condition.get("version") != 1:
-        raise ValidationError("condition.version debe ser 1.")
-
-    # note (justificación)
-    note = condition.get("note")
-    if not isinstance(note, str) or not note.strip():
-        raise ValidationError("condition.note es obligatorio y debe ser texto.")
-
-    # match
-    match = condition.get("match")
-    if not isinstance(match, dict):
-        raise ValidationError("condition.match es obligatorio y debe ser un objeto JSON.")
-
-    allowed_match_keys = {"zones", "url_categories", "urls", "http_methods", "services"}
-    unknown = set(match.keys()) - allowed_match_keys
-    if unknown:
-        raise ValidationError(
-            f"condition.match contiene claves no permitidas: {sorted(unknown)}"
-        )
-
-    # al menos 1 criterio
-    has_any = any(match.get(k) for k in allowed_match_keys)
-    if not has_any:
-        raise ValidationError(
-            "condition.match debe tener al menos un criterio (zones/url_categories/urls/http_methods/services)."
-        )
-
-    # tipos
-    if "zones" in match and not isinstance(match["zones"], list):
-        raise ValidationError("condition.match.zones debe ser lista de zone_id.")
-    if "url_categories" in match and not isinstance(match["url_categories"], list):
-        raise ValidationError("condition.match.url_categories debe ser lista de category_id.")
-    if "urls" in match and not isinstance(match["urls"], list):
-        raise ValidationError("condition.match.urls debe ser lista de strings (dominios/urls).")
-    if "http_methods" in match:
-        if not isinstance(match["http_methods"], list) or not all(
-            isinstance(x, str) for x in match["http_methods"]
-        ):
-            raise ValidationError("condition.match.http_methods debe ser lista de strings (GET/POST...).")
-    if "services" in match:
-        if not isinstance(match["services"], list):
-            raise ValidationError("condition.match.services debe ser lista.")
-        for s in match["services"]:
-            if not isinstance(s, dict):
-                raise ValidationError("Cada item de services debe ser objeto {protocol, port}.")
-            if s.get("protocol") not in {"TCP", "UDP"}:
-                raise ValidationError("services.protocol debe ser TCP o UDP.")
-            port = s.get("port")
-            if not isinstance(port, int) or port < 1 or port > 65535:
-                raise ValidationError("services.port debe ser entero 1..65535.")
-
-    # time (opcional)
-    if "time" in condition and condition["time"] is not None:
-        t = condition["time"]
-        if not isinstance(t, dict):
-            raise ValidationError("condition.time debe ser un objeto JSON.")
-
-        days = t.get("days")
-        start = t.get("start")
-        end = t.get("end")
-        tz = t.get("tz")
-
-        if not isinstance(days, list) or not days:
-            raise ValidationError("condition.time.days debe ser lista no vacía.")
-        if any(d not in DAYS for d in days):
-            raise ValidationError("condition.time.days inválido (use MON..SUN).")
-
-        if not _is_time_hhmm(start) or not _is_time_hhmm(end):
-            raise ValidationError("condition.time.start y end deben tener formato HH:MM.")
-
-        if tz is None or not isinstance(tz, str) or not tz.strip():
-            raise ValidationError("condition.time.tz es obligatorio (ej: America/Guayaquil).")
+DAYS = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+DAYS_SET = set(DAYS)
 
 
 class Rule(SoftDeleteModel):
@@ -294,7 +211,19 @@ class Rule(SoftDeleteModel):
         db_column="policy_id",
         related_name="rules",
     )
-    condition = models.JSONField()
+    url_category = models.ForeignKey(
+        UrlCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column="url_category_id",
+        related_name="rules",
+    )
+    note = models.TextField(default="")
+    schedule_days = models.CharField(max_length=64, blank=True, default="")
+    schedule_start = models.TimeField(null=True, blank=True)
+    schedule_end = models.TimeField(null=True, blank=True)
+    schedule_tz = models.CharField(max_length=80, blank=True, default="America/Guayaquil")
     action = models.CharField(max_length=10, choices=RuleAction.choices)
     priority = models.IntegerField()
     enabled = models.BooleanField(default=True)
@@ -313,9 +242,41 @@ class Rule(SoftDeleteModel):
     def __str__(self):
         return f"{self.policy.name}#{self.priority}:{self.action}"
 
+    @property
+    def schedule_days_list(self):
+        if not self.schedule_days:
+            return []
+        return [d for d in self.schedule_days.split(",") if d]
+
+    @schedule_days_list.setter
+    def schedule_days_list(self, values):
+        clean = [str(v).strip().upper() for v in (values or []) if str(v).strip()]
+        self.schedule_days = ",".join(clean)
+
     def clean(self):
         super().clean()
-        validate_rule_condition(self.condition)
+        if not self.note or not self.note.strip():
+            raise ValidationError("La nota de la regla es obligatoria.")
+
+        if not self.url_category_id:
+            raise ValidationError("Debes seleccionar una categoria URL.")
+
+        days = self.schedule_days_list
+        has_schedule = bool(days or self.schedule_start or self.schedule_end)
+        if has_schedule:
+            if not days or not self.schedule_start or not self.schedule_end or not self.schedule_tz:
+                raise ValidationError(
+                    "Para horario debes completar dias, hora inicio, hora fin y zona horaria."
+                )
+
+            invalid_days = [d for d in days if d not in DAYS_SET]
+            if invalid_days:
+                raise ValidationError(
+                    f"Dias de horario invalidos: {', '.join(invalid_days)}. Usa MON..SUN."
+                )
+
+            if self.schedule_start >= self.schedule_end:
+                raise ValidationError("La hora de inicio debe ser menor a la hora fin.")
 
     def save(self, *args, **kwargs):
         self.full_clean()

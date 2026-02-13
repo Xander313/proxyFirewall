@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block sidebar_menu %}
+{% include 'partials/sidebar_menu.html' %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .form-card { border: 0; border-radius: 16px; background: #fff; box-shadow: 0 10px 26px rgba(0,0,0,.08); overflow: hidden; }
+  .form-card .card-header { background: linear-gradient(135deg, #222d32 0%, #1b2428 100%); color: #fff; border: 0; padding: 18px 22px; font-weight: 700; }
+  .form-card .card-body { padding: 22px; }
+  .form-label { font-weight: 700; color: #111827; margin-bottom: 8px; }
+  .form-control, .form-select {
+    border-radius: 12px;
+    border: 2px solid #e5e7eb;
+    padding: 12px 14px;
+    background: #fff !important;
+    color: #111827 !important;
+  }
+  .form-control::placeholder { color: #6b7280; opacity: 1; }
+  .form-select option { color: #111827 !important; background: #fff !important; }
+  .form-control:focus, .form-select:focus { border-color: rgba(60,141,188,.55); box-shadow: 0 0 0 .25rem rgba(60,141,188,.15); }
+  .invalid-feedback { display: block; margin-top: 6px; font-size: .875rem; }
+  .is-invalid { border-color: #e74c3c !important; }
+  .btn { border-radius: 12px; font-weight: 800; }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container-fluid py-3">
+  <h1 class="text-center">{{ titulo }}</h1>
+  <hr>
+
+  <div class="card form-card">
+    <div class="card-header"><i class="fa fa-cogs me-2"></i>Formulario de Servicio</div>
+    <div class="card-body">
+      <form method="post" id="form_service" novalidate>
+        {% csrf_token %}
+
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label" for="id_name">Nombre</label>
+            {{ form.name }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="id_protocol">Protocolo</label>
+            {{ form.protocol }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="id_port">Puerto</label>
+            {{ form.port }}
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <button type="submit" class="btn btn-success px-4"><i class="fa fa-save me-2"></i>Guardar</button>
+          <a href="{% url 'service_list' %}" class="btn btn-secondary px-4"><i class="fa fa-times me-2"></i>Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.5/dist/jquery.validate.min.js"></script>
+<script>
+$(function () {
+  $('#form_service').validate({
+    rules: {
+      name: { required: true, minlength: 2, maxlength: 120 },
+      protocol: { required: true, minlength: 2, maxlength: 10 },
+      port: { required: true, digits: true, min: 1, max: 65535 }
+    },
+    messages: {
+      name: {
+        required: 'Ingresa el nombre del servicio.',
+        minlength: 'Minimo 2 caracteres.',
+        maxlength: 'Maximo 120 caracteres.'
+      },
+      protocol: {
+        required: 'Ingresa el protocolo.',
+        minlength: 'Minimo 2 caracteres.',
+        maxlength: 'Maximo 10 caracteres.'
+      },
+      port: {
+        required: 'Ingresa el puerto.',
+        digits: 'Debe ser numerico.',
+        min: 'Puerto minimo 1.',
+        max: 'Puerto maximo 65535.'
+      }
+    },
+    errorElement: 'div',
+    errorPlacement: function (error, element) {
+      error.addClass('invalid-feedback');
+      error.insertAfter(element);
+    },
+    highlight: function (element) { $(element).addClass('is-invalid'); },
+    unhighlight: function (element) { $(element).removeClass('is-invalid'); }
+  });
+});
+</script>
+{% endblock %}
